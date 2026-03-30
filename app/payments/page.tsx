@@ -16,6 +16,7 @@ import {
   useListPlansQuery,
   useListSubscriptionsQuery,
   usePayInvoiceMutation,
+  useUpdatePlanMutation,
   useUpdateSubscriptionMutation,
 } from '@/redux/api/billing-api'
 
@@ -23,12 +24,15 @@ export default function PaymentsPage() {
   const { data: shops = [] } = useListShopsQuery()
   const { data: plans = [], isLoading: isPlansLoading, isError: isPlansError } = useListPlansQuery()
   const [createPlan, { isLoading: isCreatingPlan }] = useCreatePlanMutation()
+  const [updatePlan, { isLoading: isUpdatingPlan }] = useUpdatePlanMutation()
 
   const [selectedShopId, setSelectedShopId] = useState<string>('')
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignShopId, setAssignShopId] = useState<string>('')
   const [assignPlanId, setAssignPlanId] = useState<string>('')
   const [createPlanOpen, setCreatePlanOpen] = useState(false)
+  const [editPlanOpen, setEditPlanOpen] = useState(false)
+  const [editPlanId, setEditPlanId] = useState<string | null>(null)
   const [payOpen, setPayOpen] = useState(false)
   const [payInvoiceId, setPayInvoiceId] = useState<string | null>(null)
 
@@ -49,11 +53,18 @@ export default function PaymentsPage() {
   const [planCode, setPlanCode] = useState('')
   const [planCurrency, setPlanCurrency] = useState('NGN')
   const [planPriceMonthly, setPlanPriceMonthly] = useState('0')
+  const [planIsActive, setPlanIsActive] = useState<'active' | 'disabled'>('active')
 
   const canCreatePlan = useMemo(() => {
     const price = Number(planPriceMonthly)
     return planName.trim().length > 0 && planCode.trim().length > 0 && Number.isFinite(price) && price >= 0
   }, [planCode, planName, planPriceMonthly])
+
+  const canUpdatePlan = useMemo(() => {
+    if (!editPlanId) return false
+    const price = Number(planPriceMonthly)
+    return planName.trim().length > 0 && planCurrency.trim().length > 0 && Number.isFinite(price) && price >= 0
+  }, [editPlanId, planCurrency, planName, planPriceMonthly])
 
   const canAssignPlan = useMemo(() => assignShopId && assignPlanId, [assignPlanId, assignShopId])
 
@@ -149,6 +160,7 @@ export default function PaymentsPage() {
                     <th className="py-2 pr-4">Code</th>
                     <th className="py-2 pr-4">Price</th>
                     <th className="py-2 pr-4">Status</th>
+                    <th className="py-2 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -163,6 +175,24 @@ export default function PaymentsPage() {
                       </td>
                       <td className="py-3 pr-4">
                         <Badge className={p.isActive ? '' : 'opacity-60'}>{p.isActive ? 'active' : 'disabled'}</Badge>
+                      </td>
+                      <td className="py-3 text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isUpdatingPlan}
+                          onClick={() => {
+                            setEditPlanId(p.id)
+                            setPlanName(p.name)
+                            setPlanCode(p.code)
+                            setPlanCurrency(p.currency ?? 'NGN')
+                            setPlanPriceMonthly(String(p.priceMonthly ?? 0))
+                            setPlanIsActive(p.isActive ? 'active' : 'disabled')
+                            setEditPlanOpen(true)
+                          }}
+                        >
+                          Edit
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -242,6 +272,7 @@ export default function PaymentsPage() {
                   <thead className="text-left text-muted-foreground">
                     <tr className="border-b border-border">
                       <th className="py-2 pr-4">Amount</th>
+                      <th className="py-2 pr-4">Provider</th>
                       <th className="py-2 pr-4">Status</th>
                       <th className="py-2 pr-4">Period</th>
                       <th className="py-2 pr-4">Due</th>
@@ -255,6 +286,14 @@ export default function PaymentsPage() {
                           {inv.currency} {inv.amount}
                         </td>
                         <td className="py-3 pr-4">
+                          <div className="text-xs text-muted-foreground">
+                            {inv.paymentProvider ?? '-'}
+                            {inv.paymentReference ? (
+                              <div className="font-mono">{inv.paymentReference}</div>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4">
                           <Badge>{inv.status}</Badge>
                         </td>
                         <td className="py-3 pr-4">
@@ -266,7 +305,7 @@ export default function PaymentsPage() {
                           <span className="text-xs text-muted-foreground">{inv.dueDate.toLocaleDateString()}</span>
                         </td>
                         <td className="py-3 text-right">
-                          {inv.status === 'unpaid' ? (
+                          {inv.status === 'unpaid' && inv.paymentProvider !== 'paystack' ? (
                             <Button
                               size="sm"
                               disabled={isPayingInvoice}
@@ -277,6 +316,8 @@ export default function PaymentsPage() {
                             >
                               Mark paid
                             </Button>
+                          ) : inv.status === 'unpaid' && inv.paymentProvider === 'paystack' ? (
+                            <span className="text-xs text-muted-foreground">Awaiting Paystack</span>
                           ) : (
                             <span className="text-xs text-muted-foreground">
                               {inv.paidAt ? `Paid ${inv.paidAt.toLocaleDateString()}` : ''}
@@ -349,6 +390,83 @@ export default function PaymentsPage() {
                 }}
               >
                 {isCreatingPlan ? 'Creating...' : 'Create plan'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+        <Modal
+          open={editPlanOpen}
+          onOpenChange={(open) => {
+            if (!isUpdatingPlan) setEditPlanOpen(open)
+          }}
+          title="Edit Plan"
+          description="Update plan details and availability."
+        >
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Name</label>
+                <Input value={planName} onChange={(e) => setPlanName(e.target.value)} placeholder="e.g. Starter" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Code</label>
+                <Input value={planCode} disabled />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Currency</label>
+                <Input value={planCurrency} onChange={(e) => setPlanCurrency(e.target.value)} placeholder="NGN" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Price / month</label>
+                <Input
+                  value={planPriceMonthly}
+                  onChange={(e) => setPlanPriceMonthly(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Status</label>
+                <select
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  value={planIsActive}
+                  onChange={(e) => setPlanIsActive(e.target.value === 'active' ? 'active' : 'disabled')}
+                >
+                  <option value="active">active</option>
+                  <option value="disabled">disabled</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isUpdatingPlan}
+                onClick={() => {
+                  setEditPlanOpen(false)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={!canUpdatePlan || isUpdatingPlan}
+                onClick={async () => {
+                  if (!editPlanId) return
+                  const price = Number(planPriceMonthly)
+                  await updatePlan({
+                    planId: editPlanId,
+                    input: {
+                      name: planName.trim(),
+                      currency: planCurrency.trim() || 'NGN',
+                      priceMonthly: Number.isFinite(price) ? price : 0,
+                      isActive: planIsActive === 'active',
+                    },
+                  }).unwrap()
+                  setEditPlanOpen(false)
+                }}
+              >
+                {isUpdatingPlan ? 'Saving...' : 'Save changes'}
               </Button>
             </div>
           </div>

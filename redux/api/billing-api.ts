@@ -22,6 +22,11 @@ export const billingApi = baseApi.injectEndpoints({
       transformResponse: (response: any) => mapPlan(response?.item),
       invalidatesTags: [{ type: 'Plan', id: 'LIST' }],
     }),
+    updatePlan: build.mutation<ApiPlan, { planId: string; input: Partial<{ name: string; currency: string; priceMonthly: number; isActive: boolean }> }>({
+      query: ({ planId, input }) => ({ url: `/billing/plans/${planId}`, method: 'PATCH', body: input }),
+      transformResponse: (response: any) => mapPlan(response?.item),
+      invalidatesTags: (_r, _e, arg) => [{ type: 'Plan', id: arg.planId }, { type: 'Plan', id: 'LIST' }],
+    }),
     listSubscriptions: build.query<ApiSubscription[], { shopId?: string } | void>({
       query: (arg) => {
         const shopId = (arg as any)?.shopId
@@ -90,10 +95,10 @@ export const billingApi = baseApi.injectEndpoints({
 export const {
   useListPlansQuery,
   useCreatePlanMutation,
+  useUpdatePlanMutation,
   useListSubscriptionsQuery,
   useCreateSubscriptionMutation,
   useUpdateSubscriptionMutation,
   useListInvoicesQuery,
   usePayInvoiceMutation,
 } = billingApi
-

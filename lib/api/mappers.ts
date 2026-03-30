@@ -54,6 +54,8 @@ export type ApiInvoice = {
   currency: string
   amount: number
   status: ApiInvoiceStatus
+  paymentProvider?: string | null
+  paymentReference?: string | null
   periodStart: Date
   periodEnd: Date
   dueDate: Date
@@ -138,6 +140,8 @@ export function mapInvoice(i: any): ApiInvoice {
     currency: String(i?.currency ?? 'NGN'),
     amount: Number(i?.amount ?? 0),
     status,
+    paymentProvider: i?.paymentProvider ? String(i.paymentProvider) : null,
+    paymentReference: i?.paymentReference ? String(i.paymentReference) : null,
     periodStart: toIsoDate(i?.periodStart),
     periodEnd: toIsoDate(i?.periodEnd),
     dueDate: toIsoDate(i?.dueDate),
