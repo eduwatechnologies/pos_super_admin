@@ -46,7 +46,12 @@ export function Modal({ open, onOpenChange, title, description, children, classN
         }}
       />
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <div className={cn('w-full max-w-lg rounded-xl border border-border bg-card text-card-foreground shadow-lg', className)}>
+        <div
+          className={cn(
+            'flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg',
+            className,
+          )}
+        >
           {(title || description) && (
             <div className="flex items-start justify-between gap-4 border-b border-border p-5">
               <div className="min-w-0">
@@ -65,7 +70,7 @@ export function Modal({ open, onOpenChange, title, description, children, classN
               </Button>
             </div>
           )}
-          <div className="p-5">{children}</div>
+          <div className="flex-1 overflow-y-auto p-5">{children}</div>
         </div>
       </div>
     </div>,

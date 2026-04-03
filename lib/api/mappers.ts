@@ -26,6 +26,7 @@ export type ApiPlan = {
   code: string
   currency: string
   priceMonthly: number
+  features: Record<string, any>
   isActive: boolean
   createdAt?: Date
 }
@@ -104,6 +105,7 @@ export function mapPlan(p: any): ApiPlan {
     code: String(p?.code ?? ''),
     currency: String(p?.currency ?? 'NGN'),
     priceMonthly: Number(p?.priceMonthly ?? 0),
+    features: typeof p?.features === 'object' && p?.features ? p.features : {},
     isActive: p?.isActive !== false,
     createdAt: p?.createdAt ? toIsoDate(p.createdAt) : undefined,
   }

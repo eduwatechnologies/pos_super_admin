@@ -17,12 +17,21 @@ export const billingApi = baseApi.injectEndpoints({
             ]
           : [{ type: 'Plan' as const, id: 'LIST' }],
     }),
-    createPlan: build.mutation<ApiPlan, { name: string; code: string; currency?: string; priceMonthly: number; isActive?: boolean }>({
+    createPlan: build.mutation<
+      ApiPlan,
+      { name: string; code: string; currency?: string; priceMonthly: number; isActive?: boolean; features?: Record<string, any> }
+    >({
       query: (body) => ({ url: '/billing/plans', method: 'POST', body }),
       transformResponse: (response: any) => mapPlan(response?.item),
       invalidatesTags: [{ type: 'Plan', id: 'LIST' }],
     }),
-    updatePlan: build.mutation<ApiPlan, { planId: string; input: Partial<{ name: string; currency: string; priceMonthly: number; isActive: boolean }> }>({
+    updatePlan: build.mutation<
+      ApiPlan,
+      {
+        planId: string
+        input: Partial<{ name: string; currency: string; priceMonthly: number; isActive: boolean; features: Record<string, any> }>
+      }
+    >({
       query: ({ planId, input }) => ({ url: `/billing/plans/${planId}`, method: 'PATCH', body: input }),
       transformResponse: (response: any) => mapPlan(response?.item),
       invalidatesTags: (_r, _e, arg) => [{ type: 'Plan', id: arg.planId }, { type: 'Plan', id: 'LIST' }],

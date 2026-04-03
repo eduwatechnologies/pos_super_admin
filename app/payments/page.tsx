@@ -54,18 +54,115 @@ export default function PaymentsPage() {
   const [planCurrency, setPlanCurrency] = useState('NGN')
   const [planPriceMonthly, setPlanPriceMonthly] = useState('0')
   const [planIsActive, setPlanIsActive] = useState<'active' | 'disabled'>('active')
+  const [planFeaturesText, setPlanFeaturesText] = useState('{}')
+  const [featureKeyDraft, setFeatureKeyDraft] = useState('')
+  const [featureTypeDraft, setFeatureTypeDraft] = useState<'number' | 'boolean' | 'string' | 'json'>('number')
+  const [featureValueDraft, setFeatureValueDraft] = useState('')
+
+  const featuresParse = useMemo(() => {
+    const raw = planFeaturesText.trim()
+    if (!raw) return { ok: true as const, value: {} as Record<string, any> }
+    try {
+      const v = JSON.parse(raw)
+      if (!v || typeof v !== 'object' || Array.isArray(v)) {
+        return { ok: false as const, value: {} as Record<string, any> }
+      }
+      return { ok: true as const, value: v as Record<string, any> }
+    } catch {
+      return { ok: false as const, value: {} as Record<string, any> }
+    }
+  }, [planFeaturesText])
+
+  const featureEntries = useMemo(() => {
+    if (!featuresParse.ok) return []
+    const entries = Object.entries(featuresParse.value || {})
+    entries.sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+    return entries
+  }, [featuresParse.ok, featuresParse.value])
+
+  const canApplyFeatureDraft = useMemo(() => {
+    if (!featuresParse.ok) return false
+    const key = featureKeyDraft.trim()
+    if (!key) return false
+    if (featureTypeDraft === 'string') return true
+    if (featureTypeDraft === 'number') {
+      const n = Number(featureValueDraft)
+      return Number.isFinite(n)
+    }
+    if (featureTypeDraft === 'boolean') {
+      return featureValueDraft === 'true' || featureValueDraft === 'false'
+    }
+    if (featureTypeDraft === 'json') {
+      try {
+        JSON.parse(featureValueDraft || 'null')
+        return true
+      } catch {
+        return false
+      }
+    }
+    return false
+  }, [featureKeyDraft, featureTypeDraft, featureValueDraft, featuresParse.ok])
+
+  const upsertFeatureDraft = () => {
+    if (!featuresParse.ok) return
+    const key = featureKeyDraft.trim()
+    if (!key) return
+
+    let value: any = featureValueDraft
+    if (featureTypeDraft === 'number') value = Number(featureValueDraft)
+    if (featureTypeDraft === 'boolean') value = featureValueDraft === 'true'
+    if (featureTypeDraft === 'json') value = JSON.parse(featureValueDraft || 'null')
+
+    const next = { ...(featuresParse.value || {}), [key]: value }
+    setPlanFeaturesText(JSON.stringify(next, null, 2))
+  }
+
+  const removeFeatureKey = (key: string) => {
+    if (!featuresParse.ok) return
+    const next = { ...(featuresParse.value || {}) }
+    delete (next as any)[key]
+    setPlanFeaturesText(JSON.stringify(next, null, 2))
+  }
+
+  const loadFeatureIntoDraft = (key: string, value: any) => {
+    setFeatureKeyDraft(key)
+    if (typeof value === 'number') {
+      setFeatureTypeDraft('number')
+      setFeatureValueDraft(String(value))
+      return
+    }
+    if (typeof value === 'boolean') {
+      setFeatureTypeDraft('boolean')
+      setFeatureValueDraft(value ? 'true' : 'false')
+      return
+    }
+    if (typeof value === 'string') {
+      setFeatureTypeDraft('string')
+      setFeatureValueDraft(value)
+      return
+    }
+    setFeatureTypeDraft('json')
+    setFeatureValueDraft(JSON.stringify(value, null, 2))
+  }
 
   const canCreatePlan = useMemo(() => {
     const price = Number(planPriceMonthly)
-    return planName.trim().length > 0 && planCode.trim().length > 0 && Number.isFinite(price) && price >= 0
-  }, [planCode, planName, planPriceMonthly])
+    return (
+      planName.trim().length > 0 &&
+      planCode.trim().length > 0 &&
+      Number.isFinite(price) &&
+      price >= 0 &&
+      featuresParse.ok
+    )
+  }, [featuresParse.ok, planCode, planName, planPriceMonthly])
 
   const canUpdatePlan = useMemo(() => {
     if (!editPlanId) return false
     const price = Number(planPriceMonthly)
-    return planName.trim().length > 0 && planCurrency.trim().length > 0 && Number.isFinite(price) && price >= 0
-  }, [editPlanId, planCurrency, planName, planPriceMonthly])
+    return planName.trim().length > 0 && planCurrency.trim().length > 0 && Number.isFinite(price) && price >= 0 && featuresParse.ok
+  }, [editPlanId, featuresParse.ok, planCurrency, planName, planPriceMonthly])
 
+  const assignablePlans = useMemo(() => plans.filter((p) => p.isActive), [plans])
   const canAssignPlan = useMemo(() => assignShopId && assignPlanId, [assignPlanId, assignShopId])
 
   return (
@@ -109,6 +206,10 @@ export default function PaymentsPage() {
                   setPlanCode('')
                   setPlanCurrency('NGN')
                   setPlanPriceMonthly('0')
+                  setPlanFeaturesText('{}')
+                  setFeatureKeyDraft('')
+                  setFeatureTypeDraft('number')
+                  setFeatureValueDraft('')
                   setCreatePlanOpen(true)
                 }}
               >
@@ -141,6 +242,10 @@ export default function PaymentsPage() {
                   setPlanCode('')
                   setPlanCurrency('NGN')
                   setPlanPriceMonthly('0')
+                  setPlanFeaturesText('{}')
+                  setFeatureKeyDraft('')
+                  setFeatureTypeDraft('number')
+                  setFeatureValueDraft('')
                   setCreatePlanOpen(true)
                 }}
               >
@@ -188,6 +293,10 @@ export default function PaymentsPage() {
                             setPlanCurrency(p.currency ?? 'NGN')
                             setPlanPriceMonthly(String(p.priceMonthly ?? 0))
                             setPlanIsActive(p.isActive ? 'active' : 'disabled')
+                            setPlanFeaturesText(JSON.stringify(p.features ?? {}, null, 2))
+                            setFeatureKeyDraft('')
+                            setFeatureTypeDraft('number')
+                            setFeatureValueDraft('')
                             setEditPlanOpen(true)
                           }}
                         >
@@ -364,6 +473,101 @@ export default function PaymentsPage() {
                   placeholder="0"
                 />
               </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Features (JSON)</label>
+                {featuresParse.ok ? (
+                  <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                    <div className="grid gap-2 md:grid-cols-3">
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Key</div>
+                        <Input value={featureKeyDraft} onChange={(e) => setFeatureKeyDraft(e.target.value)} placeholder="e.g. maxTerminals" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Type</div>
+                        <select
+                          className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                          value={featureTypeDraft}
+                          onChange={(e) => setFeatureTypeDraft(e.target.value as any)}
+                        >
+                          <option value="number">number</option>
+                          <option value="boolean">boolean</option>
+                          <option value="string">string</option>
+                          <option value="json">json</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Value</div>
+                        {featureTypeDraft === 'json' ? (
+                          <textarea
+                            className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                            value={featureValueDraft}
+                            onChange={(e) => setFeatureValueDraft(e.target.value)}
+                            placeholder='e.g. {"canExport":true}'
+                          />
+                        ) : featureTypeDraft === 'boolean' ? (
+                          <select
+                            className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                            value={featureValueDraft || 'true'}
+                            onChange={(e) => setFeatureValueDraft(e.target.value)}
+                          >
+                            <option value="true">true</option>
+                            <option value="false">false</option>
+                          </select>
+                        ) : (
+                          <Input value={featureValueDraft} onChange={(e) => setFeatureValueDraft(e.target.value)} placeholder="e.g. 1" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted-foreground">Add or update a single feature without editing JSON manually.</div>
+                      <Button type="button" size="sm" variant="outline" disabled={!canApplyFeatureDraft} onClick={upsertFeatureDraft}>
+                        Add / Update
+                      </Button>
+                    </div>
+
+                    {featureEntries.length ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="text-left text-muted-foreground">
+                            <tr className="border-b border-border">
+                              <th className="py-2 pr-4">Key</th>
+                              <th className="py-2 pr-4">Value</th>
+                              <th className="py-2 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {featureEntries.map(([k, v]) => (
+                              <tr key={k} className="border-b border-border">
+                                <td className="py-2 pr-4 font-mono text-xs">{k}</td>
+                                <td className="py-2 pr-4 font-mono text-xs">{JSON.stringify(v)}</td>
+                                <td className="py-2 text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <Button type="button" size="sm" variant="outline" onClick={() => loadFeatureIntoDraft(String(k), v)}>
+                                      Edit
+                                    </Button>
+                                    <Button type="button" size="sm" variant="destructive" onClick={() => removeFeatureKey(String(k))}>
+                                      Remove
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No features yet.</div>
+                    )}
+                  </div>
+                ) : null}
+                <textarea
+                  className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  value={planFeaturesText}
+                  onChange={(e) => setPlanFeaturesText(e.target.value)}
+                  placeholder='e.g. {"trialDays":7,"maxTerminals":1}'
+                />
+                {!featuresParse.ok ? <div className="text-xs text-destructive">Invalid JSON object.</div> : null}
+              </div>
             </div>
             <div className="flex justify-end gap-2">
               <Button
@@ -385,6 +589,7 @@ export default function PaymentsPage() {
                     code: planCode.trim(),
                     currency: planCurrency.trim() || 'NGN',
                     priceMonthly: Number.isFinite(price) ? price : 0,
+                    features: featuresParse.value,
                   }).unwrap()
                   setCreatePlanOpen(false)
                 }}
@@ -427,6 +632,101 @@ export default function PaymentsPage() {
                 />
               </div>
               <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium">Features (JSON)</label>
+                {featuresParse.ok ? (
+                  <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                    <div className="grid gap-2 md:grid-cols-3">
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Key</div>
+                        <Input value={featureKeyDraft} onChange={(e) => setFeatureKeyDraft(e.target.value)} placeholder="e.g. maxTerminals" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Type</div>
+                        <select
+                          className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                          value={featureTypeDraft}
+                          onChange={(e) => setFeatureTypeDraft(e.target.value as any)}
+                        >
+                          <option value="number">number</option>
+                          <option value="boolean">boolean</option>
+                          <option value="string">string</option>
+                          <option value="json">json</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">Value</div>
+                        {featureTypeDraft === 'json' ? (
+                          <textarea
+                            className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                            value={featureValueDraft}
+                            onChange={(e) => setFeatureValueDraft(e.target.value)}
+                            placeholder='e.g. {"canExport":true}'
+                          />
+                        ) : featureTypeDraft === 'boolean' ? (
+                          <select
+                            className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                            value={featureValueDraft || 'true'}
+                            onChange={(e) => setFeatureValueDraft(e.target.value)}
+                          >
+                            <option value="true">true</option>
+                            <option value="false">false</option>
+                          </select>
+                        ) : (
+                          <Input value={featureValueDraft} onChange={(e) => setFeatureValueDraft(e.target.value)} placeholder="e.g. 1" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted-foreground">Add or update a single feature without editing JSON manually.</div>
+                      <Button type="button" size="sm" variant="outline" disabled={!canApplyFeatureDraft} onClick={upsertFeatureDraft}>
+                        Add / Update
+                      </Button>
+                    </div>
+
+                    {featureEntries.length ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="text-left text-muted-foreground">
+                            <tr className="border-b border-border">
+                              <th className="py-2 pr-4">Key</th>
+                              <th className="py-2 pr-4">Value</th>
+                              <th className="py-2 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {featureEntries.map(([k, v]) => (
+                              <tr key={k} className="border-b border-border">
+                                <td className="py-2 pr-4 font-mono text-xs">{k}</td>
+                                <td className="py-2 pr-4 font-mono text-xs">{JSON.stringify(v)}</td>
+                                <td className="py-2 text-right">
+                                  <div className="flex justify-end gap-2">
+                                    <Button type="button" size="sm" variant="outline" onClick={() => loadFeatureIntoDraft(String(k), v)}>
+                                      Edit
+                                    </Button>
+                                    <Button type="button" size="sm" variant="destructive" onClick={() => removeFeatureKey(String(k))}>
+                                      Remove
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No features yet.</div>
+                    )}
+                  </div>
+                ) : null}
+                <textarea
+                  className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  value={planFeaturesText}
+                  onChange={(e) => setPlanFeaturesText(e.target.value)}
+                  placeholder='e.g. {"trialDays":7,"maxTerminals":1}'
+                />
+                {!featuresParse.ok ? <div className="text-xs text-destructive">Invalid JSON object.</div> : null}
+              </div>
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">Status</label>
                 <select
                   className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
@@ -460,6 +760,7 @@ export default function PaymentsPage() {
                       name: planName.trim(),
                       currency: planCurrency.trim() || 'NGN',
                       priceMonthly: Number.isFinite(price) ? price : 0,
+                      features: featuresParse.value,
                       isActive: planIsActive === 'active',
                     },
                   }).unwrap()
@@ -504,7 +805,7 @@ export default function PaymentsPage() {
                 onChange={(e) => setAssignPlanId(e.target.value)}
               >
                 <option value="">Select a plan</option>
-                {plans.map((p) => (
+                {assignablePlans.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.currency} {p.priceMonthly}/mo)
                   </option>
