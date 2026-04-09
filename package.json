@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "node ./node_modules/eslint/bin/eslint.js app components context lib redux --max-warnings=0"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.11.2",

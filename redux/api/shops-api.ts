@@ -32,11 +32,10 @@ export const shopsApi = baseApi.injectEndpoints({
     }),
     deleteShop: build.mutation<{ ok: true }, { shopId: string }>({
       query: ({ shopId }) => ({ url: `/shops/${shopId}`, method: 'DELETE' }),
-      transformResponse: (response: any) => ({ ok: response?.ok === true }),
+      transformResponse: (_response: any) => ({ ok: true }),
       invalidatesTags: (_r, _e, arg) => [{ type: 'Shop', id: arg.shopId }, { type: 'Shop', id: 'LIST' }],
     }),
   }),
 })
 
 export const { useListShopsQuery, useCreateShopMutation, useUpdateShopMutation, useDeleteShopMutation } = shopsApi
-

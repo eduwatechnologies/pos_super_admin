@@ -20,6 +20,31 @@ import {
   useUpdateSubscriptionMutation,
 } from '@/redux/api/billing-api'
 
+const MODULE_FEATURES = [
+  { key: 'dashboard', label: 'Dashboard', description: 'Access overview and KPIs' },
+  { key: 'terminal', label: 'Terminal', description: 'Create sales and scan items' },
+  { key: 'customers', label: 'Customers', description: 'Manage customer directory' },
+  { key: 'receipts', label: 'Receipts', description: 'View and manage transactions' },
+  { key: 'analytics', label: 'Analytics', description: 'View reports and trends' },
+  { key: 'inventory', label: 'Inventory', description: 'Manage products and stock' },
+  { key: 'employees', label: 'Employees', description: 'Manage staff accounts' },
+  { key: 'settings', label: 'Settings', description: 'Change shop and system configuration' },
+] as const
+
+type ModuleKey = (typeof MODULE_FEATURES)[number]['key']
+
+function summarizePlanModules(features: any) {
+  const raw = features?.modules
+  const out: Record<string, boolean> = {}
+  for (const m of MODULE_FEATURES) {
+    out[m.key] = raw && typeof raw === 'object' && m.key in raw ? Boolean(raw[m.key]) : true
+  }
+  const enabledKeys = Object.entries(out)
+    .filter(([, v]) => v)
+    .map(([k]) => k)
+  return { enabledCount: enabledKeys.length, enabledKeys }
+}
+
 export default function PaymentsPage() {
   const { data: shops = [] } = useListShopsQuery()
   const { data: plans = [], isLoading: isPlansLoading, isError: isPlansError } = useListPlansQuery()
@@ -72,6 +97,30 @@ export default function PaymentsPage() {
       return { ok: false as const, value: {} as Record<string, any> }
     }
   }, [planFeaturesText])
+
+  const moduleFlags = useMemo(() => {
+    const base: Record<ModuleKey, boolean> = Object.fromEntries(MODULE_FEATURES.map((m) => [m.key, true])) as Record<ModuleKey, boolean>
+    if (!featuresParse.ok) return base
+    const modules = (featuresParse.value as any)?.modules
+    if (!modules || typeof modules !== 'object') return base
+    const out = { ...base }
+    for (const m of MODULE_FEATURES) {
+      if (m.key in modules) out[m.key] = Boolean((modules as any)[m.key])
+    }
+    return out
+  }, [featuresParse.ok, featuresParse.value])
+
+  const applyModules = (next: Record<ModuleKey, boolean>) => {
+    if (!featuresParse.ok) return
+    const base = featuresParse.value || {}
+    const nextFeatures = { ...base, modules: next }
+    setPlanFeaturesText(JSON.stringify(nextFeatures, null, 2))
+  }
+
+  const setModuleFlag = (key: ModuleKey, enabled: boolean) => {
+    const next = { ...moduleFlags, [key]: enabled }
+    applyModules(next)
+  }
 
   const featureEntries = useMemo(() => {
     if (!featuresParse.ok) return []
@@ -265,6 +314,7 @@ export default function PaymentsPage() {
                     <th className="py-2 pr-4">Code</th>
                     <th className="py-2 pr-4">Price</th>
                     <th className="py-2 pr-4">Status</th>
+                    <th className="py-2 pr-4">Modules</th>
                     <th className="py-2 text-right">Action</th>
                   </tr>
                 </thead>
@@ -280,6 +330,11 @@ export default function PaymentsPage() {
                       </td>
                       <td className="py-3 pr-4">
                         <Badge className={p.isActive ? '' : 'opacity-60'}>{p.isActive ? 'active' : 'disabled'}</Badge>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span className="text-xs text-muted-foreground">
+                          {summarizePlanModules(p.features).enabledCount}/{MODULE_FEATURES.length}
+                        </span>
                       </td>
                       <td className="py-3 text-right">
                         <Button
@@ -475,6 +530,63 @@ export default function PaymentsPage() {
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">Features (JSON)</label>
+                <div className="rounded-md border border-border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">Plan modules</div>
+                      <div className="text-xs text-muted-foreground">Toggle which areas of the app this plan can access.</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!featuresParse.ok}
+                        onClick={() =>
+                          applyModules(
+                            Object.fromEntries(MODULE_FEATURES.map((m) => [m.key, true])) as Record<ModuleKey, boolean>,
+                          )
+                        }
+                      >
+                        Enable all
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!featuresParse.ok}
+                        onClick={() =>
+                          applyModules(
+                            Object.fromEntries(MODULE_FEATURES.map((m) => [m.key, false])) as Record<ModuleKey, boolean>,
+                          )
+                        }
+                      >
+                        Disable all
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {MODULE_FEATURES.map((m) => (
+                      <label
+                        key={m.key}
+                        className="flex items-start gap-3 rounded-md border border-border bg-background px-3 py-2"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4"
+                          checked={moduleFlags[m.key]}
+                          disabled={!featuresParse.ok}
+                          onChange={(e) => setModuleFlag(m.key, e.target.checked)}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium">{m.label}</div>
+                          <div className="text-xs text-muted-foreground">{m.description}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 {featuresParse.ok ? (
                   <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
                     <div className="grid gap-2 md:grid-cols-3">
@@ -633,6 +745,63 @@ export default function PaymentsPage() {
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">Features (JSON)</label>
+                <div className="rounded-md border border-border bg-muted/30 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">Plan modules</div>
+                      <div className="text-xs text-muted-foreground">Toggle which areas of the app this plan can access.</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!featuresParse.ok}
+                        onClick={() =>
+                          applyModules(
+                            Object.fromEntries(MODULE_FEATURES.map((m) => [m.key, true])) as Record<ModuleKey, boolean>,
+                          )
+                        }
+                      >
+                        Enable all
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!featuresParse.ok}
+                        onClick={() =>
+                          applyModules(
+                            Object.fromEntries(MODULE_FEATURES.map((m) => [m.key, false])) as Record<ModuleKey, boolean>,
+                          )
+                        }
+                      >
+                        Disable all
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {MODULE_FEATURES.map((m) => (
+                      <label
+                        key={m.key}
+                        className="flex items-start gap-3 rounded-md border border-border bg-background px-3 py-2"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4"
+                          checked={moduleFlags[m.key]}
+                          disabled={!featuresParse.ok}
+                          onChange={(e) => setModuleFlag(m.key, e.target.checked)}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium">{m.label}</div>
+                          <div className="text-xs text-muted-foreground">{m.description}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
                 {featuresParse.ok ? (
                   <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
                     <div className="grid gap-2 md:grid-cols-3">
