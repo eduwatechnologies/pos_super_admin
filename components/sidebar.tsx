@@ -23,7 +23,7 @@ export function Sidebar() {
         <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent text-sidebar-accent-foreground">
           <Building2 className="size-4" />
         </div>
-        <span className="font-semibold text-lg tracking-tight">Super Admin</span>
+        <span className="font-semibold text-lg tracking-tight">Kounter</span>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-1">
